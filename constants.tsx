@@ -16,5 +16,16 @@ export const STORAGE_KEYS = {
   CONFIG_MENUS: 'kh_config_menus',
   CONFIG_PLATFORMS: 'kh_config_platforms',
   DRAFT: 'kh_ledger_draft',
-  LEGACY: ['kh_ledger_v25_master', 'kh_sales_v24_final', 'sales_data']
+  // v17, v24, v25 등 과거 모든 가능한 키값 포함
+  LEGACY: [
+    'kh_ledger_v25_master', 
+    'kh_sales_v24_final', 
+    'kh_sales_v24', 
+    'sales_data', 
+    'kh_ledger', 
+    'kh_ledger_v17', 
+    'kh_sales', 
+    'ledger_data',
+    'sales_records'
+  ]
 };
