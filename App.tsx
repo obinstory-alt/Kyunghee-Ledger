@@ -21,7 +21,8 @@ import {
   AreaChart as ChartIcon,
   RefreshCw,
   Search,
-  Database
+  Database,
+  Calculator
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -71,15 +72,14 @@ const App: React.FC = () => {
               consolidated.push(item);
             } else if (item.platform && item.totalAmount !== undefined) {
               // Convert v25 flat SaleRecord to v26 DailyReport
-              // We'll group them by date later or treat as individual daily reports for simplicity
               const converted: DailyReport = {
                 id: item.id || crypto.randomUUID(),
                 date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
                 entries: [{
                   platform: item.platform,
-                  menuSales: [], // Legacy didn't have menu breakdown
+                  menuSales: [], 
                   platformTotalAmount: item.totalAmount,
-                  platformTotalCount: 1, // Assume 1 if missing
+                  platformTotalCount: 1, 
                   feeAmount: item.feeAmount || 0,
                   settlementAmount: item.settlementAmount || item.totalAmount
                 }],
@@ -162,6 +162,21 @@ const App: React.FC = () => {
   }, [reports]);
 
   const recentSummary = useMemo(() => reports.slice(0, 5), [reports]);
+
+  // --- Draft Aggregation Logic ---
+  const draftMenuSummary = useMemo(() => {
+    const summary: Record<string, { count: number, amount: number }> = {};
+    draftEntries.forEach(entry => {
+      entry.menuSales.forEach(sale => {
+        if (!summary[sale.menuName]) {
+          summary[sale.menuName] = { count: 0, amount: 0 };
+        }
+        summary[sale.menuName].count += sale.count;
+        summary[sale.menuName].amount += sale.amount;
+      });
+    });
+    return Object.entries(summary).sort((a, b) => b[1].amount - a[1].amount);
+  }, [draftEntries]);
 
   // --- Input Logic ---
   const finalizeDailySettlement = () => {
@@ -358,6 +373,44 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
+                {/* 메뉴별 판매 합계 섹션 (추가 요청 사항) */}
+                {draftEntries.length > 0 && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <label className="text-xs font-bold text-white/40 ml-1 flex items-center gap-2">
+                      <Calculator className="w-3 h-3 text-blue-500" /> 오늘의 메뉴별 판매 합계 (모든 플랫폼 합산)
+                    </label>
+                    <div className="glass apple-card overflow-hidden">
+                      <table className="w-full text-[11px]">
+                        <thead className="bg-white/5 border-b border-white/5">
+                          <tr>
+                            <th className="p-3 text-left font-medium text-white/40">메뉴명</th>
+                            <th className="p-3 text-right font-medium text-white/40">판매량</th>
+                            <th className="p-3 text-right font-medium text-white/40">매출액</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {draftMenuSummary.map(([name, data]) => (
+                            <tr key={name} className="hover:bg-white/5 transition-colors">
+                              <td className="p-3 font-medium text-white/80">{name}</td>
+                              <td className="p-3 text-right">{data.count.toLocaleString()}건</td>
+                              <td className="p-3 text-right font-bold">{data.amount.toLocaleString()}원</td>
+                            </tr>
+                          ))}
+                          <tr className="bg-blue-600/10 font-bold">
+                            <td className="p-3 text-blue-400">전체 합계</td>
+                            <td className="p-3 text-right text-blue-400">
+                              {draftMenuSummary.reduce((s, d) => s + d[1].count, 0).toLocaleString()}건
+                            </td>
+                            <td className="p-3 text-right text-blue-400">
+                              {draftMenuSummary.reduce((s, d) => s + d[1].amount, 0).toLocaleString()}원
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-white/40 ml-1">특이사항 메모</label>
                   <textarea 
@@ -461,7 +514,6 @@ const App: React.FC = () => {
             <div className="space-y-10 animate-in fade-in duration-500 pb-20">
               <h1 className="text-3xl font-bold">설정 및 관리</h1>
               
-              {/* NEW: Data Recovery & Preservation Section */}
               <section className="space-y-4">
                 <h2 className="text-lg font-bold px-1 flex items-center gap-2">
                   <Database className="w-5 h-5 text-blue-500" /> 데이터 복원 및 보존
