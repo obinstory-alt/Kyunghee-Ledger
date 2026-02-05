@@ -13,7 +13,7 @@ import {
   ArrowUpRight,
   ChevronRight,
   FileSpreadsheet,
-  Save, 
+  Save,
   CheckCircle2,
   Plus,
   X,
@@ -22,9 +22,7 @@ import {
   RefreshCw,
   Search,
   Database,
-  Calculator,
-  ShieldCheck,
-  FileJson
+  Calculator
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -49,66 +47,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
 
-  // --- Hyper-Resilient Parser (Version Agnostic) ---
-  const resilientParse = useCallback((rawData: any, sourceName: string): DailyReport[] => {
-    const results: DailyReport[] = [];
-    const items = Array.isArray(rawData) ? rawData : [rawData];
-
-    items.forEach((item: any) => {
-      try {
-        // v26 Standard Check
-        if (item.entries && Array.isArray(item.entries) && item.date) {
-          results.push(item);
-          return;
-        }
-
-        // Legacy (v9~v25) & Arbitrary JSON Mapping
-        const rawDate = item.date || item.dt || item.d || item.s_date || item.sale_date || item.created_at || item.timestamp || item.day;
-        if (!rawDate) return;
-
-        let formattedDate: string;
-        try {
-          if (typeof rawDate === 'string') {
-            const match = rawDate.match(/(\d{4})-(\d{2})-(\d{2})/);
-            formattedDate = match ? match[0] : new Date(rawDate).toISOString().split('T')[0];
-          } else {
-            formattedDate = new Date(rawDate).toISOString().split('T')[0];
-          }
-        } catch { return; }
-
-        const rawAmount = item.totalAmount ?? item.amount ?? item.amt ?? item.sum ?? item.price ?? item.total_price ?? item.val ?? item.sales ?? 0;
-        const rawCount = item.totalCount ?? item.count ?? item.cnt ?? item.qty ?? item.quantity ?? item.orders ?? 1;
-        let rawPlatform = (item.platform || item.plat || item.type || item.platform_name || item.p_type || 'STORE').toString().toUpperCase();
-
-        if (rawPlatform.includes('BAEMIN') || rawPlatform.includes('배달')) rawPlatform = 'BAEMIN';
-        else if (rawPlatform.includes('COUPANG') || rawPlatform.includes('쿠팡')) rawPlatform = 'COUPANG';
-        else if (rawPlatform.includes('YOGIYO') || rawPlatform.includes('요기')) rawPlatform = 'YOGIYO';
-        else if (rawPlatform.includes('NAVER') || rawPlatform.includes('네이버')) rawPlatform = 'NAVER';
-        else rawPlatform = 'STORE';
-
-        results.push({
-          id: item.id || crypto.randomUUID(),
-          date: formattedDate,
-          entries: [{
-            platform: rawPlatform as PlatformType,
-            menuSales: item.menuSales || item.menus || [],
-            platformTotalAmount: Number(rawAmount),
-            platformTotalCount: Number(rawCount),
-            feeAmount: Number(item.feeAmount || item.fee || 0),
-            settlementAmount: Number(item.settlementAmount || item.settle || rawAmount)
-          }],
-          totalAmount: Number(rawAmount),
-          totalCount: Number(rawCount),
-          memo: item.memo || item.note || item.comment || `Restored from ${sourceName}`,
-          createdAt: item.createdAt || Date.now()
-        });
-      } catch (e) { console.warn("Parse error for item:", item, e); }
-    });
-
-    return results;
-  }, []);
-
-  // --- Core Data Logic: Scan & Consolidate (Global Search) ---
+  // --- Core Data Logic: Scan & Consolidate ---
   const scanAndConsolidate = useCallback((manual = false) => {
     setIsScanning(true);
     let consolidated: DailyReport[] = [];
@@ -119,38 +58,54 @@ const App: React.FC = () => {
       try { consolidated = JSON.parse(currentData); } catch(e) { console.error(e); }
     }
 
-    // 2. Deep Scan: LocalStorage의 모든 키를 전수 조사 (v9~v25 및 기타 모든 명칭 대응)
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-
-      // 이미 처리한 현재 버전의 키는 건너뜀
-      if (key === STORAGE_KEYS.REPORTS) continue;
-
-      const data = localStorage.getItem(key);
-      if (!data) continue;
+    // 2. Scan Legacy Keys
+    STORAGE_KEYS.LEGACY.forEach(key => {
+      const legacyData = localStorage.getItem(key);
+      if (!legacyData) return;
 
       try {
-        const parsed = JSON.parse(data);
-        // JSON 데이터가 배열이거나 특정 필드를 포함하고 있다면 복원 엔진 가동
-        if (Array.isArray(parsed) || (typeof parsed === 'object' && parsed !== null)) {
-          const restored = resilientParse(parsed, key);
-          consolidated = [...consolidated, ...restored];
+        const parsed = JSON.parse(legacyData);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            // Check if it's already a v26 format or needs conversion
+            if (item.entries && Array.isArray(item.entries)) {
+              consolidated.push(item);
+            } else if (item.platform && item.totalAmount !== undefined) {
+              // Convert v25 flat SaleRecord to v26 DailyReport
+              const converted: DailyReport = {
+                id: item.id || crypto.randomUUID(),
+                date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+                entries: [{
+                  platform: item.platform,
+                  menuSales: [], 
+                  platformTotalAmount: item.totalAmount,
+                  platformTotalCount: 1, 
+                  feeAmount: item.feeAmount || 0,
+                  settlementAmount: item.settlementAmount || item.totalAmount
+                }],
+                totalAmount: item.totalAmount,
+                totalCount: 1,
+                memo: `Converted from legacy data (${key})`,
+                createdAt: item.createdAt || Date.now()
+              };
+              consolidated.push(converted);
+            }
+          });
         }
       } catch (e) {
-        // JSON이 아닌 데이터는 무시
+        console.warn(`Failed to parse legacy key: ${key}`, e);
       }
-    }
+    });
 
-    // 3. 중복 제거 및 병합
+    // 3. Deduplicate by ID and Sort by Date (Desc)
     const uniqueReports = Array.from(new Map(consolidated.map(r => [r.id, r])).values())
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     setReports(uniqueReports);
     localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(uniqueReports));
     setIsScanning(false);
-    if (manual) alert(`글로벌 스캔 완료: 로컬 스토리지의 모든 장부 데이터를 검색하여 총 ${uniqueReports.length}건을 성공적으로 보호/복원했습니다.`);
-  }, [resilientParse]);
+    if (manual) alert('과거 데이터 스캔 및 통합이 완료되었습니다.');
+  }, []);
 
   // --- Initial Sync ---
   useEffect(() => {
@@ -266,17 +221,12 @@ const App: React.FC = () => {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        
-        // 파일 임포트 시에도 하이퍼-레질리언트 파서 적용 (버전 무관 복원)
-        const importedReports = resilientParse(data.reports || data, file.name);
-        
+        const importedReports = Array.isArray(data) ? data : (data.reports || []);
         const combined = [...reports, ...importedReports];
         const unique = Array.from(new Map(combined.map(r => [r.id, r])).values())
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
         saveReports(unique);
-        
-        // 설정 복원 (있는 경우에만)
         if (data.customMenus) {
           setCustomMenus(data.customMenus);
           localStorage.setItem(STORAGE_KEYS.CONFIG_MENUS, JSON.stringify(data.customMenus));
@@ -285,10 +235,9 @@ const App: React.FC = () => {
           setPlatformConfigs(data.platformConfigs);
           localStorage.setItem(STORAGE_KEYS.CONFIG_PLATFORMS, JSON.stringify(data.platformConfigs));
         }
-        
-        alert(`데이터 복원 성공: '${file.name}'에서 ${importedReports.length}건의 기록을 성공적으로 분석하여 복원했습니다.`);
+        alert('데이터를 성공적으로 복원했습니다.');
       } catch (e) {
-        alert('파일 형식이 올바르지 않거나 데이터가 손상되었습니다.');
+        alert('파일 형식이 올바르지 않습니다.');
       }
     };
     reader.readAsText(file);
@@ -298,7 +247,7 @@ const App: React.FC = () => {
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('DAILY');
   const [statsViewType, setStatsViewType] = useState<'LIST' | 'CHART'>('LIST');
 
-  if (loading) return <div className="h-screen flex items-center justify-center text-white/20">시스템 초기화 중...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
   return (
     <div className="flex h-screen overflow-hidden bg-black text-white selection:bg-blue-500/30">
@@ -424,7 +373,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
-                {/* 메뉴별 판매 합계 섹션 */}
+                {/* 메뉴별 판매 합계 섹션 (추가 요청 사항) */}
                 {draftEntries.length > 0 && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
                     <label className="text-xs font-bold text-white/40 ml-1 flex items-center gap-2">
@@ -573,19 +522,20 @@ const App: React.FC = () => {
                   <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                     <div className="flex-1">
                       <div className="font-bold flex items-center gap-2">
-                        글로벌 데이터 스캔 엔진 (v9~v26 완전 대응)
+                        과거 데이터 자동 스캔 엔진
                         {isScanning && <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />}
                       </div>
                       <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        장치의 로컬 스토리지를 전수 조사하여 과거 모든 버전의 파편화된 데이터를 자동 통합합니다. 
-                        중복 데이터는 ID 기준으로 자동 필터링되어 유실 없이 복구됩니다.
+                        앱이 구동될 때 브라우저의 localStorage를 전수 조사하여 
+                        kh_sales_v24_final, kh_sales_v24, sales_data 등 과거 파편화된 데이터를 통합합니다.
+                        중복된 항목은 ID 기준으로 자동 합산 및 정렬됩니다.
                       </p>
                     </div>
                     <button 
                       onClick={() => scanAndConsolidate(true)}
                       className="whitespace-nowrap bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-2xl font-bold text-sm flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-600/20"
                     >
-                      <ShieldCheck className="w-4 h-4" /> 장치 내 모든 데이터 정밀 스캔
+                      <Search className="w-4 h-4" /> 데이터 수동 스캔
                     </button>
                   </div>
 
@@ -601,10 +551,10 @@ const App: React.FC = () => {
                        }}
                        className="glass py-4 rounded-2xl flex items-center justify-center gap-3 text-white/80 hover:bg-white/10 transition-all font-bold text-sm"
                     >
-                      <Download className="w-5 h-5 text-blue-500" /> 전체 데이터 백업 (JSON)
+                      <Download className="w-5 h-5 text-blue-500" /> 전체 데이터 내보내기 (JSON)
                     </button>
-                    <label className="glass py-4 rounded-2xl flex items-center justify-center gap-3 text-white/80 hover:bg-white/10 transition-all font-bold text-sm cursor-pointer border-dashed border-white/20">
-                      <FileJson className="w-5 h-5 text-emerald-500" /> 외부 JSON 파일 데이터 복원
+                    <label className="glass py-4 rounded-2xl flex items-center justify-center gap-3 text-white/80 hover:bg-white/10 transition-all font-bold text-sm cursor-pointer">
+                      <Upload className="w-5 h-5 text-emerald-500" /> 백업 파일 불러오기 (Import)
                       <input type="file" className="hidden" accept=".json" onChange={importData} />
                     </label>
                   </div>
