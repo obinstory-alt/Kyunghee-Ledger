@@ -13,7 +13,7 @@ import {
   ArrowUpRight,
   ChevronRight,
   FileSpreadsheet,
-  Save,
+  Save, 
   CheckCircle2,
   Plus,
   X,
@@ -47,7 +47,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
 
-  // --- Core Data Logic: Scan & Consolidate (Enhanced for v17/v24/v25) ---
+  // --- Core Data Logic: Scan & Consolidate (Enhanced for v9~v25) ---
   const scanAndConsolidate = useCallback((manual = false) => {
     setIsScanning(true);
     let consolidated: DailyReport[] = [];
@@ -58,7 +58,7 @@ const App: React.FC = () => {
       try { consolidated = JSON.parse(currentData); } catch(e) { console.error(e); }
     }
 
-    // 2. Scan Legacy Keys with Enhanced Detection
+    // 2. Scan Legacy Keys with Hyper-Resilient Detection (Supporting v9~v15)
     STORAGE_KEYS.LEGACY.forEach(key => {
       const legacyData = localStorage.getItem(key);
       if (!legacyData) return;
@@ -71,27 +71,49 @@ const App: React.FC = () => {
             if (item.entries && Array.isArray(item.entries)) {
               consolidated.push(item);
             } 
-            // 구버전(v17~v25) 형식인 경우 정규화
+            // 구버전(v9~v25) 형식인 경우 정규화
             else {
-              // 날짜 감지 (date, dt, d 중 하나)
-              const rawDate = item.date || item.dt || item.d;
-              if (!rawDate) return; // 날짜가 없으면 유효하지 않은 데이터로 간주
+              // 날짜 감지 필드 대폭 확장 (v9~v15 대응)
+              const rawDate = item.date || item.dt || item.d || item.s_date || item.sale_date || item.created_at || item.timestamp;
+              if (!rawDate) return;
 
-              const formattedDate = typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0];
+              let formattedDate: string;
+              try {
+                if (typeof rawDate === 'string') {
+                  // YYYY-MM-DD 형식 추출 시도
+                  const match = rawDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+                  if (match) {
+                    formattedDate = match[0];
+                  } else {
+                    formattedDate = new Date(rawDate).toISOString().split('T')[0];
+                  }
+                } else {
+                  formattedDate = new Date(rawDate).toISOString().split('T')[0];
+                }
+              } catch (err) {
+                return; // 유효하지 않은 날짜는 건너뜀
+              }
               
-              // 금액 감지 (totalAmount, amount, amt, sum 중 하나)
-              const rawAmount = item.totalAmount ?? item.amount ?? item.amt ?? item.sum ?? 0;
-              // 건수 감지 (totalCount, count, cnt, qty 중 하나)
-              const rawCount = item.totalCount ?? item.count ?? item.cnt ?? item.qty ?? 1;
-              // 플랫폼 감지 (platform, plat, type 중 하나)
-              const rawPlatform = (item.platform || item.plat || item.type || 'STORE').toUpperCase() as PlatformType;
+              // 금액 감지 (v9~v15 구버전 필드 포함)
+              const rawAmount = item.totalAmount ?? item.amount ?? item.amt ?? item.sum ?? item.price ?? item.total_price ?? item.val ?? 0;
+              // 건수 감지
+              const rawCount = item.totalCount ?? item.count ?? item.cnt ?? item.qty ?? item.quantity ?? 1;
+              // 플랫폼 감지 및 매핑
+              let rawPlatform = (item.platform || item.plat || item.type || item.platform_name || item.p_type || 'STORE').toString().toUpperCase();
+              
+              // 플랫폼 명칭 정규화
+              if (rawPlatform.includes('BAEMIN') || rawPlatform.includes('배달')) rawPlatform = 'BAEMIN';
+              else if (rawPlatform.includes('COUPANG') || rawPlatform.includes('쿠팡')) rawPlatform = 'COUPANG';
+              else if (rawPlatform.includes('YOGIYO') || rawPlatform.includes('요기')) rawPlatform = 'YOGIYO';
+              else if (rawPlatform.includes('NAVER') || rawPlatform.includes('네이버')) rawPlatform = 'NAVER';
+              else rawPlatform = 'STORE';
 
               const converted: DailyReport = {
                 id: item.id || crypto.randomUUID(),
                 date: formattedDate,
                 entries: [{
-                  platform: Object.keys(INITIAL_PLATFORMS).includes(rawPlatform) ? rawPlatform : 'STORE',
-                  menuSales: item.menuSales || [], // v17 등에 메뉴별 상세가 있다면 보존
+                  platform: rawPlatform as PlatformType,
+                  menuSales: item.menuSales || [], 
                   platformTotalAmount: Number(rawAmount),
                   platformTotalCount: Number(rawCount),
                   feeAmount: Number(item.feeAmount || 0),
@@ -99,7 +121,7 @@ const App: React.FC = () => {
                 }],
                 totalAmount: Number(rawAmount),
                 totalCount: Number(rawCount),
-                memo: item.memo || `Restored from ${key}`,
+                memo: item.memo || item.note || `Restored from ${key}`,
                 createdAt: item.createdAt || Date.now()
               };
               consolidated.push(converted);
@@ -111,14 +133,16 @@ const App: React.FC = () => {
       }
     });
 
-    // 3. Deduplicate by ID and Sort by Date (Desc)
+    // 3. 중복 제거 및 병합 (날짜별로 합칠 수도 있으나, 여기서는 ID 기반 유지 후 정렬)
+    // 날짜가 같고 플랫폼이 같은 데이터들을 하나로 합치는 고도화 로직을 추가할 수 있으나,
+    // 현재는 유실 없는 복원이 최우선이므로 ID 유니크 처리 유지
     const uniqueReports = Array.from(new Map(consolidated.map(r => [r.id, r])).values())
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     setReports(uniqueReports);
     localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(uniqueReports));
     setIsScanning(false);
-    if (manual) alert(`데이터 스캔 완료: 총 ${uniqueReports.length}건의 기록이 복원/보존되었습니다.`);
+    if (manual) alert(`데이터 스캔 완료: v9~v25를 포함하여 총 ${uniqueReports.length}건의 기록이 복원되었습니다.`);
   }, []);
 
   // --- Initial Sync ---
@@ -536,11 +560,11 @@ const App: React.FC = () => {
                   <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                     <div className="flex-1">
                       <div className="font-bold flex items-center gap-2">
-                        과거 데이터 자동 스캔 엔진 (v17/v24/v25 대응)
+                        과거 데이터 자동 스캔 엔진 (v9~v25 대응)
                         {isScanning && <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />}
                       </div>
                       <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        앱이 구동될 때 브라우저의 localStorage를 전수 조사하여 과거 1월~2월(v17) 데이터 및 
+                        앱이 구동될 때 브라우저의 localStorage를 전수 조사하여 과거 1월~2월(v9~v15) 데이터 및 
                         파편화된 모든 기록을 통합합니다. 중복된 항목은 ID 기준으로 자동 합산 및 정렬됩니다.
                       </p>
                     </div>
