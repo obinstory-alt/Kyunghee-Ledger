@@ -47,7 +47,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
 
-  // --- Core Data Logic: Scan & Consolidate ---
+  // --- Core Data Logic: Scan & Consolidate (Enhanced for v17/v24/v25) ---
   const scanAndConsolidate = useCallback((manual = false) => {
     setIsScanning(true);
     let consolidated: DailyReport[] = [];
@@ -58,7 +58,7 @@ const App: React.FC = () => {
       try { consolidated = JSON.parse(currentData); } catch(e) { console.error(e); }
     }
 
-    // 2. Scan Legacy Keys
+    // 2. Scan Legacy Keys with Enhanced Detection
     STORAGE_KEYS.LEGACY.forEach(key => {
       const legacyData = localStorage.getItem(key);
       if (!legacyData) return;
@@ -67,25 +67,39 @@ const App: React.FC = () => {
         const parsed = JSON.parse(legacyData);
         if (Array.isArray(parsed)) {
           parsed.forEach((item: any) => {
-            // Check if it's already a v26 format or needs conversion
+            // v26 형식인 경우 바로 추가
             if (item.entries && Array.isArray(item.entries)) {
               consolidated.push(item);
-            } else if (item.platform && item.totalAmount !== undefined) {
-              // Convert v25 flat SaleRecord to v26 DailyReport
+            } 
+            // 구버전(v17~v25) 형식인 경우 정규화
+            else {
+              // 날짜 감지 (date, dt, d 중 하나)
+              const rawDate = item.date || item.dt || item.d;
+              if (!rawDate) return; // 날짜가 없으면 유효하지 않은 데이터로 간주
+
+              const formattedDate = typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0];
+              
+              // 금액 감지 (totalAmount, amount, amt, sum 중 하나)
+              const rawAmount = item.totalAmount ?? item.amount ?? item.amt ?? item.sum ?? 0;
+              // 건수 감지 (totalCount, count, cnt, qty 중 하나)
+              const rawCount = item.totalCount ?? item.count ?? item.cnt ?? item.qty ?? 1;
+              // 플랫폼 감지 (platform, plat, type 중 하나)
+              const rawPlatform = (item.platform || item.plat || item.type || 'STORE').toUpperCase() as PlatformType;
+
               const converted: DailyReport = {
                 id: item.id || crypto.randomUUID(),
-                date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+                date: formattedDate,
                 entries: [{
-                  platform: item.platform,
-                  menuSales: [], 
-                  platformTotalAmount: item.totalAmount,
-                  platformTotalCount: 1, 
-                  feeAmount: item.feeAmount || 0,
-                  settlementAmount: item.settlementAmount || item.totalAmount
+                  platform: Object.keys(INITIAL_PLATFORMS).includes(rawPlatform) ? rawPlatform : 'STORE',
+                  menuSales: item.menuSales || [], // v17 등에 메뉴별 상세가 있다면 보존
+                  platformTotalAmount: Number(rawAmount),
+                  platformTotalCount: Number(rawCount),
+                  feeAmount: Number(item.feeAmount || 0),
+                  settlementAmount: Number(item.settlementAmount || rawAmount)
                 }],
-                totalAmount: item.totalAmount,
-                totalCount: 1,
-                memo: `Converted from legacy data (${key})`,
+                totalAmount: Number(rawAmount),
+                totalCount: Number(rawCount),
+                memo: item.memo || `Restored from ${key}`,
                 createdAt: item.createdAt || Date.now()
               };
               consolidated.push(converted);
@@ -104,7 +118,7 @@ const App: React.FC = () => {
     setReports(uniqueReports);
     localStorage.setItem(STORAGE_KEYS.REPORTS, JSON.stringify(uniqueReports));
     setIsScanning(false);
-    if (manual) alert('과거 데이터 스캔 및 통합이 완료되었습니다.');
+    if (manual) alert(`데이터 스캔 완료: 총 ${uniqueReports.length}건의 기록이 복원/보존되었습니다.`);
   }, []);
 
   // --- Initial Sync ---
@@ -373,7 +387,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
-                {/* 메뉴별 판매 합계 섹션 (추가 요청 사항) */}
+                {/* 메뉴별 판매 합계 섹션 (유지됨) */}
                 {draftEntries.length > 0 && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-300">
                     <label className="text-xs font-bold text-white/40 ml-1 flex items-center gap-2">
@@ -522,13 +536,12 @@ const App: React.FC = () => {
                   <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                     <div className="flex-1">
                       <div className="font-bold flex items-center gap-2">
-                        과거 데이터 자동 스캔 엔진
+                        과거 데이터 자동 스캔 엔진 (v17/v24/v25 대응)
                         {isScanning && <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />}
                       </div>
                       <p className="text-xs text-white/40 mt-1 leading-relaxed">
-                        앱이 구동될 때 브라우저의 localStorage를 전수 조사하여 
-                        kh_sales_v24_final, kh_sales_v24, sales_data 등 과거 파편화된 데이터를 통합합니다.
-                        중복된 항목은 ID 기준으로 자동 합산 및 정렬됩니다.
+                        앱이 구동될 때 브라우저의 localStorage를 전수 조사하여 과거 1월~2월(v17) 데이터 및 
+                        파편화된 모든 기록을 통합합니다. 중복된 항목은 ID 기준으로 자동 합산 및 정렬됩니다.
                       </p>
                     </div>
                     <button 
