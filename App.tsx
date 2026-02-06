@@ -28,7 +28,8 @@ import {
   PieChart as PieIcon,
   Layers,
   ShoppingBag,
-  Tag
+  Tag,
+  ArrowRight
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -210,6 +211,7 @@ const App: React.FC = () => {
       .sort((a, b) => b.period.localeCompare(a.period));
   }, [reports, statsPeriod]);
 
+  // 요구사항 3, 4: 메뉴별, 플랫폼별 상세 통계
   const detailedAggregates = useMemo(() => {
     const platformMap = new Map<PlatformType, { amount: number, count: number }>();
     const menuMap = new Map<string, { amount: number, count: number }>();
@@ -282,7 +284,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-black text-white selection:bg-blue-500/30">
-      {/* Sidebar */}
+      {/* Sidebar (Desktop) */}
       <nav className="hidden md:flex flex-col w-72 glass border-r border-white/10 p-6 space-y-6">
         <div className="text-2xl font-bold tracking-tighter px-2 flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><Wallet className="w-5 h-5" /></div>
@@ -296,10 +298,11 @@ const App: React.FC = () => {
         </div>
       </nav>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-24 md:pb-6 scroll-smooth">
         <div className="max-w-4xl mx-auto px-6 pt-10">
           
+          {/* VIEW: HOME */}
           {view === 'HOME' && (
             <div className="space-y-10 animate-in fade-in slide-in-from-top-2 duration-500">
               <header className="flex justify-between items-end">
@@ -331,6 +334,9 @@ const App: React.FC = () => {
                           <td className="py-4 px-4 text-right text-white/40">{r.totalCount}건</td>
                         </tr>
                       ))}
+                      {reports.length === 0 && (
+                        <tr><td colSpan={3} className="p-12 text-center text-white/20 italic">데이터가 없습니다.</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -338,6 +344,7 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* VIEW: INPUT */}
           {view === 'INPUT' && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
               <h1 className="text-3xl font-bold">일정산 마감</h1>
@@ -346,7 +353,12 @@ const App: React.FC = () => {
                   <label className="text-xs font-bold text-white/40 ml-1">정산 날짜</label>
                   <input type="date" value={draftDate} onChange={e => setDraftDate(e.target.value)} className="w-full text-lg font-medium" />
                 </div>
-                <PlatformInputSection menus={customMenus} configs={platformConfigs} onAddEntry={(entry) => setDraftEntries([...draftEntries.filter(e => e.platform !== entry.platform), entry])} existingEntries={draftEntries} />
+                <PlatformInputSection 
+                  menus={customMenus} 
+                  configs={platformConfigs} 
+                  onAddEntry={(entry) => setDraftEntries([...draftEntries.filter(e => e.platform !== entry.platform), entry])} 
+                  existingEntries={draftEntries} 
+                />
                 {draftEntries.length > 0 && (
                   <div className="space-y-3 glass apple-card p-4 border-blue-500/20 bg-blue-500/5">
                     <label className="text-xs font-bold text-blue-400 flex items-center gap-2"><Calculator className="w-4 h-4" /> 실시간 메뉴별 판매 합계</label>
@@ -362,26 +374,32 @@ const App: React.FC = () => {
                 )}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-white/40 ml-1">특이사항 메모</label>
-                  <textarea value={draftMemo} onChange={e => setDraftMemo(e.target.value)} placeholder="메모..." className="w-full glass rounded-2xl p-4 text-sm h-24 resize-none" />
+                  <textarea value={draftMemo} onChange={e => setDraftMemo(e.target.value)} placeholder="오늘의 특이사항..." className="w-full glass rounded-2xl p-4 text-sm h-24 resize-none focus:outline-none focus:border-blue-500" />
                 </div>
-                <button onClick={finalizeDailySettlement} disabled={draftEntries.length === 0} className="w-full bg-blue-600 py-4 rounded-2xl font-bold text-lg hover:bg-blue-500 disabled:opacity-20 transition-all">정산 완료</button>
+                <button onClick={finalizeDailySettlement} disabled={draftEntries.length === 0} className="w-full bg-blue-600 py-4 rounded-2xl font-bold text-lg hover:bg-blue-500 disabled:opacity-20 transition-all shadow-lg shadow-blue-600/20">오늘 정산 마감하기</button>
               </div>
             </div>
           )}
 
+          {/* VIEW: STATS (고도화된 통계 분석) */}
           {view === 'STATS' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="space-y-8 animate-in fade-in duration-500 pb-12">
               <header className="flex items-center justify-between">
                 <h1 className="text-3xl font-bold">통계 분석</h1>
                 <div className="flex bg-white/5 p-1 rounded-xl">
-                  <button onClick={() => setStatsViewType('LIST')} className={`p-2 rounded-lg ${statsViewType === 'LIST' ? 'bg-white/10' : 'text-white/30'}`}><List className="w-4 h-4" /></button>
-                  <button onClick={() => setStatsViewType('CHART')} className={`p-2 rounded-lg ${statsViewType === 'CHART' ? 'bg-white/10' : 'text-white/30'}`}><ChartIcon className="w-4 h-4" /></button>
+                  <button onClick={() => setStatsViewType('LIST')} className={`p-2 rounded-lg transition-all ${statsViewType === 'LIST' ? 'bg-white/10 text-white' : 'text-white/30'}`}><List className="w-4 h-4" /></button>
+                  <button onClick={() => setStatsViewType('CHART')} className={`p-2 rounded-lg transition-all ${statsViewType === 'CHART' ? 'bg-white/10 text-white' : 'text-white/30'}`}><ChartIcon className="w-4 h-4" /></button>
                 </div>
               </header>
 
-              <div className="flex gap-2 overflow-x-auto pb-2">
+              {/* 요구사항 1: 먼지 기준 (일별, 주별, 월별, 연별) */}
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                 {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'] as StatsPeriod[]).map(p => (
-                  <button key={p} onClick={() => setStatsPeriod(p)} className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all ${statsPeriod === p ? 'bg-blue-600' : 'glass text-white/40'}`}>
+                  <button 
+                    key={p} 
+                    onClick={() => setStatsPeriod(p)} 
+                    className={`px-5 py-2.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${statsPeriod === p ? 'bg-blue-600 text-white' : 'glass text-white/40 hover:text-white'}`}
+                  >
                     {p === 'DAILY' ? '일별' : p === 'WEEKLY' ? '주별' : p === 'MONTHLY' ? '월별' : '연별'}
                   </button>
                 ))}
@@ -389,51 +407,81 @@ const App: React.FC = () => {
 
               {statsViewType === 'LIST' ? (
                 <div className="space-y-10">
-                  {/* Period Stats */}
-                  <section className="space-y-3">
-                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> 기간별 매출 및 주문건수</h2>
+                  {/* 요구사항 2: 매출현황과 주문건수 (기간별) */}
+                  <section className="space-y-4">
+                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-500" /> 기간별 매출 및 주문 요약</h2>
                     <div className="glass apple-card overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-white/5 border-b border-white/5">
-                          <tr><th className="p-4 text-left text-white/40">기간</th><th className="p-4 text-right text-white/40">매출액</th><th className="p-4 text-right text-white/40">주문건수</th></tr>
+                          <tr>
+                            <th className="p-4 text-left text-white/40">분류 기간</th>
+                            <th className="p-4 text-right text-white/40">총 매출액</th>
+                            <th className="p-4 text-right text-white/40">주문수</th>
+                          </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                           {groupedStats.map(s => (
-                            <tr key={s.period} className="hover:bg-white/5"><td className="p-4">{s.period}</td><td className="p-4 text-right font-bold text-blue-400">{s.amount.toLocaleString()}원</td><td className="p-4 text-right text-white/60">{s.count}건</td></tr>
+                            <tr key={s.period} className="hover:bg-white/5 transition-colors">
+                              <td className="p-4 font-medium">{s.period}</td>
+                              <td className="p-4 text-right font-bold text-blue-400">{s.amount.toLocaleString()}원</td>
+                              <td className="p-4 text-right text-white/60">{s.count.toLocaleString()}건</td>
+                            </tr>
                           ))}
+                          {groupedStats.length === 0 && (
+                            <tr><td colSpan={3} className="p-10 text-center text-white/20 italic">분석할 데이터가 없습니다.</td></tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </section>
 
-                  {/* Menu Stats */}
-                  <section className="space-y-3">
-                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><Tag className="w-4 h-4" /> 메뉴별 누적 판매 합계 (전체 플랫폼)</h2>
+                  {/* 요구사항 4: 플랫폼별 매출과 주문건수 */}
+                  <section className="space-y-4">
+                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><ShoppingBag className="w-4 h-4 text-emerald-500" /> 플랫폼별 매출 기여도</h2>
                     <div className="glass apple-card overflow-hidden">
                       <table className="w-full text-sm">
                         <thead className="bg-white/5 border-b border-white/5">
-                          <tr><th className="p-4 text-left text-white/40">메뉴명</th><th className="p-4 text-right text-white/40">총 매출</th><th className="p-4 text-right text-white/40">총 판매량</th></tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {detailedAggregates.menus.map(([name, data]) => (
-                            <tr key={name}><td className="p-4">{name}</td><td className="p-4 text-right font-bold">{data.amount.toLocaleString()}원</td><td className="p-4 text-right text-white/40">{data.count}건</td></tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-
-                  {/* Platform Stats */}
-                  <section className="space-y-3">
-                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><ShoppingBag className="w-4 h-4" /> 플랫폼별 매출 및 주문 분석</h2>
-                    <div className="glass apple-card overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-white/5 border-b border-white/5">
-                          <tr><th className="p-4 text-left text-white/40">플랫폼</th><th className="p-4 text-right text-white/40">총 매출</th><th className="p-4 text-right text-white/40">총 주문수</th></tr>
+                          <tr>
+                            <th className="p-4 text-left text-white/40">플랫폼</th>
+                            <th className="p-4 text-right text-white/40">누적 매출</th>
+                            <th className="p-4 text-right text-white/40">누적 주문</th>
+                          </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                           {detailedAggregates.platforms.map(([id, data]) => (
-                            <tr key={id}><td className="p-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{background: platformConfigs[id].color}} />{platformConfigs[id].name}</td><td className="p-4 text-right font-bold">{data.amount.toLocaleString()}원</td><td className="p-4 text-right text-white/40">{data.count}건</td></tr>
+                            <tr key={id} className="hover:bg-white/5 transition-colors">
+                              <td className="p-4 flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{background: platformConfigs[id].color}} />
+                                <span className="font-semibold">{platformConfigs[id].name}</span>
+                              </td>
+                              <td className="p-4 text-right font-bold">{data.amount.toLocaleString()}원</td>
+                              <td className="p-4 text-right text-white/40">{data.count.toLocaleString()}건</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+
+                  {/* 요구사항 3: 메뉴별 매출과 주문건수 (플랫폼 합계) */}
+                  <section className="space-y-4">
+                    <h2 className="text-sm font-bold text-white/40 px-1 flex items-center gap-2"><Tag className="w-4 h-4 text-amber-500" /> 메뉴별 누적 판매 순위 (전체 합계)</h2>
+                    <div className="glass apple-card overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-white/5 border-b border-white/5">
+                          <tr>
+                            <th className="p-4 text-left text-white/40">메뉴명</th>
+                            <th className="p-4 text-right text-white/40">총 매출액</th>
+                            <th className="p-4 text-right text-white/40">총 판매량</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {detailedAggregates.menus.map(([name, data]) => (
+                            <tr key={name} className="hover:bg-white/5 transition-colors">
+                              <td className="p-4 font-medium">{name}</td>
+                              <td className="p-4 text-right font-bold text-white">{data.amount.toLocaleString()}원</td>
+                              <td className="p-4 text-right text-white/40">{data.count.toLocaleString()}건</td>
+                            </tr>
                           ))}
                         </tbody>
                       </table>
@@ -441,56 +489,104 @@ const App: React.FC = () => {
                   </section>
                 </div>
               ) : (
-                <div className="glass apple-card p-6 h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={groupedStats.slice().reverse()}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="period" hide />
-                      <YAxis hide />
-                      <Tooltip contentStyle={{background: '#111', border: 'none', borderRadius: '12px'}} />
-                      <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={0.1} fill="#3b82f6" strokeWidth={3} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div className="space-y-6">
+                   <div className="glass apple-card p-6 h-80">
+                      <h3 className="text-xs font-bold mb-6 text-white/40 uppercase tracking-widest">매출 변동 추이</h3>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={groupedStats.slice().reverse()}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="period" hide />
+                          <YAxis hide />
+                          <Tooltip 
+                            contentStyle={{background: '#111', border: 'none', borderRadius: '16px', fontSize: '12px'}} 
+                            formatter={(value: any) => [`${value.toLocaleString()}원`, '매출액']}
+                          />
+                          <Area type="monotone" dataKey="amount" stroke="#3b82f6" fillOpacity={0.15} fill="#3b82f6" strokeWidth={4} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                   </div>
+                   <div className="glass apple-card p-6 h-80">
+                      <h3 className="text-xs font-bold mb-6 text-white/40 uppercase tracking-widest">주문 건수 변동 추이</h3>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={groupedStats.slice().reverse()}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="period" hide />
+                          <YAxis hide />
+                          <Tooltip 
+                            contentStyle={{background: '#111', border: 'none', borderRadius: '16px', fontSize: '12px'}} 
+                            formatter={(value: any) => [`${value.toLocaleString()}건`, '주문수']}
+                          />
+                          <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                   </div>
                 </div>
               )}
+
+              <button className="w-full glass py-5 rounded-[24px] flex items-center justify-center gap-3 text-white/60 hover:text-white transition-all hover:bg-white/10">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-500" /> 전체 통계 데이터 엑셀 추출
+              </button>
             </div>
           )}
 
+          {/* VIEW: SETTINGS */}
           {view === 'SETTINGS' && (
             <div className="space-y-10 animate-in fade-in duration-500 pb-20">
               <h1 className="text-3xl font-bold">설정</h1>
               <section className="space-y-4">
-                <h2 className="text-lg font-bold px-1 flex items-center gap-2"><Database className="w-5 h-5 text-blue-500" /> 데이터 관리</h2>
+                <h2 className="text-lg font-bold px-1 flex items-center gap-2"><Database className="w-5 h-5 text-blue-500" /> 데이터 보호 및 스캔</h2>
                 <div className="glass apple-card p-6 space-y-4">
-                  <button onClick={() => scanAndConsolidate(true)} className="w-full bg-blue-600 py-3 rounded-xl font-bold flex items-center justify-center gap-2"><ShieldCheck className="w-4 h-4" /> 모든 데이터 정밀 스캔</button>
-                  <label className="glass py-3 rounded-xl flex items-center justify-center gap-2 font-bold cursor-pointer"><FileJson className="w-4 h-4 text-emerald-500" /> 외부 파일 복원<input type="file" className="hidden" accept=".json" onChange={importData} /></label>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                       <p className="font-bold">하이퍼 데이터 스캔 엔진</p>
+                       <p className="text-xs text-white/40 mt-1">로컬 스토리지의 모든 파편화된 과거 장부 데이터를 검색하여 v26으로 통합합니다.</p>
+                    </div>
+                    <button onClick={() => scanAndConsolidate(true)} className="bg-blue-600 px-5 py-3 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-blue-500 active:scale-95 transition-all">
+                      <ShieldCheck className="w-4 h-4" /> 정밀 스캔
+                    </button>
+                  </div>
+                  <div className="pt-4 border-t border-white/5">
+                    <label className="w-full glass py-4 rounded-xl flex items-center justify-center gap-2 font-bold cursor-pointer hover:bg-white/10 transition-all border-dashed border-white/20">
+                      <FileJson className="w-5 h-5 text-emerald-500" /> 외부 JSON 백업 파일 복원
+                      <input type="file" className="hidden" accept=".json" onChange={importData} />
+                    </label>
+                  </div>
                 </div>
               </section>
+
               <section className="space-y-4">
-                <h2 className="text-lg font-bold px-1">플랫폼 수수료</h2>
+                <h2 className="text-lg font-bold px-1">수수료 정책 설정</h2>
                 <div className="glass apple-card divide-y divide-white/5 overflow-hidden">
                   {(Object.values(platformConfigs) as PlatformConfig[]).map(p => (
-                    <div key={p.id} className="p-4 flex justify-between items-center">
-                      <span>{p.name}</span>
-                      <div className="flex items-center gap-2">
-                        <input type="number" step="0.1" value={p.feeRate * 100} onChange={e => {
-                          const newRate = Number(e.target.value) / 100;
-                          const next = {...platformConfigs, [p.id]: {...p, feeRate: newRate}};
-                          setPlatformConfigs(next);
-                          localStorage.setItem(STORAGE_KEYS.CONFIG_PLATFORMS, JSON.stringify(next));
-                        }} className="w-16 text-right text-xs" /> %
+                    <div key={p.id} className="p-5 flex justify-between items-center hover:bg-white/5 transition-colors">
+                      <span className="font-medium">{p.name}</span>
+                      <div className="flex items-center gap-3">
+                        <input 
+                          type="number" 
+                          step="0.1" 
+                          value={p.feeRate * 100} 
+                          onChange={e => {
+                            const newRate = Number(e.target.value) / 100;
+                            const next = {...platformConfigs, [p.id]: {...p, feeRate: newRate}};
+                            setPlatformConfigs(next);
+                            localStorage.setItem(STORAGE_KEYS.CONFIG_PLATFORMS, JSON.stringify(next));
+                          }} 
+                          className="w-20 text-right font-bold text-blue-400" 
+                        /> 
+                        <span className="text-xs text-white/40 font-bold">%</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </section>
-              <button onClick={() => { if(confirm('삭제?')) saveReports([]); }} className="w-full glass py-4 rounded-2xl text-rose-500 font-bold">전체 데이터 초기화</button>
+
+              <button onClick={() => { if(confirm('모든 장부 데이터를 영구 삭제하시겠습니까?')) saveReports([]); }} className="w-full glass py-4 rounded-2xl text-rose-500 font-bold hover:bg-rose-500/10 transition-all">전체 데이터 초기화</button>
             </div>
           )}
         </div>
       </main>
 
-      {/* Tab Bar Mobile */}
+      {/* Mobile Tab Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 glass border-t border-white/10 h-20 px-6 flex items-center justify-around z-50">
         <TabBtn icon={HomeIcon} label="홈" active={view === 'HOME'} onClick={() => setView('HOME')} />
         <TabBtn icon={PlusCircle} label="기록" active={view === 'INPUT'} onClick={() => setView('INPUT')} />
@@ -501,26 +597,45 @@ const App: React.FC = () => {
   );
 };
 
-// --- Helpers ---
+// --- Helper Components ---
+
 const MetricCard: React.FC<{ label: string, value: string, icon: any, color: string, highlight?: boolean }> = ({ label, value, icon: Icon, color, highlight }) => (
-  <div className={`glass apple-card p-5 space-y-3 ${highlight ? 'ring-1 ring-blue-500/50 bg-blue-500/5' : ''}`}>
-    <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">{label}</span><Icon className={`w-4 h-4 ${color}`} /></div>
-    <div className="flex items-baseline gap-1"><span className="text-xl font-bold tracking-tight">{value}</span><span className="text-xs text-white/20">원</span></div>
+  <div className={`glass apple-card p-5 space-y-3 transition-all ${highlight ? 'ring-2 ring-blue-500/40 bg-blue-500/10' : ''}`}>
+    <div className="flex justify-between items-center">
+      <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{label}</span>
+      <Icon className={`w-4 h-4 ${color}`} />
+    </div>
+    <div className="flex items-baseline gap-1">
+      <span className="text-2xl font-bold tracking-tight">{value}</span>
+      <span className="text-xs text-white/20 font-bold">원</span>
+    </div>
   </div>
 );
+
 const NavBtn: React.FC<{ icon: any, label: string, active: boolean, onClick: () => void }> = ({ icon: Icon, label, active, onClick }) => (
   <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all ${active ? 'bg-white/10 text-white' : 'text-white/30 hover:text-white hover:bg-white/5'}`}>
-    <Icon className={`w-5 h-5 ${active ? 'text-blue-500' : ''}`} /><span className="font-semibold text-sm">{label}</span>
+    <Icon className={`w-5 h-5 ${active ? 'text-blue-500' : ''}`} />
+    <span className="font-semibold text-sm">{label}</span>
   </button>
 );
+
 const TabBtn: React.FC<{ icon: any, label: string, active: boolean, onClick: () => void }> = ({ icon: Icon, label, active, onClick }) => (
-  <button onClick={onClick} className={`flex flex-col items-center gap-1 ${active ? 'text-blue-500' : 'text-white/30'}`}><Icon className="w-6 h-6" /><span className="text-[10px] font-bold">{label}</span></button>
+  <button onClick={onClick} className={`flex flex-col items-center gap-1 transition-all ${active ? 'text-blue-500' : 'text-white/30'}`}>
+    <Icon className={`w-6 h-6 ${active ? 'scale-110' : ''}`} />
+    <span className="text-[10px] font-bold">{label}</span>
+  </button>
 );
 
-const PlatformInputSection: React.FC<{ menus: string[], configs: Record<PlatformType, PlatformConfig>, onAddEntry: (e: PlatformDailyEntry) => void, existingEntries: PlatformDailyEntry[] }> = ({ menus, configs, onAddEntry, existingEntries }) => {
+const PlatformInputSection: React.FC<{ 
+  menus: string[], 
+  configs: Record<PlatformType, PlatformConfig>, 
+  onAddEntry: (e: PlatformDailyEntry) => void, 
+  existingEntries: PlatformDailyEntry[] 
+}> = ({ menus, configs, onAddEntry, existingEntries }) => {
   const [sel, setSel] = useState<PlatformType>('BAEMIN');
   const [data, setData] = useState<Record<string, { count: string, amount: string }>>({});
   const active = existingEntries.find(e => e.platform === sel);
+
   useEffect(() => {
     if (active) {
       const d: any = {};
@@ -528,30 +643,76 @@ const PlatformInputSection: React.FC<{ menus: string[], configs: Record<Platform
       setData(d);
     } else setData({});
   }, [sel, active]);
+
   const handleSave = () => {
-    const sales: MenuSale[] = (Object.entries(data) as [string, { count: string, amount: string }][]).map(([name, val]) => ({ menuName: name, count: Number(val.count) || 0, amount: Number(val.amount) || 0 })).filter(s => s.count > 0 || s.amount > 0);
+    const sales: MenuSale[] = (Object.entries(data) as [string, { count: string, amount: string }][]).map(([name, val]) => ({ 
+      menuName: name, 
+      count: Number(val.count) || 0, 
+      amount: Number(val.amount) || 0 
+    })).filter(s => s.count > 0 || s.amount > 0);
+
     const amount = sales.reduce((s, x) => s + x.amount, 0);
     const count = sales.reduce((s, x) => s + x.count, 0);
     const fee = Math.floor(amount * configs[sel].feeRate);
-    onAddEntry({ platform: sel, menuSales: sales, platformTotalAmount: amount, platformTotalCount: count, feeAmount: fee, settlementAmount: amount - fee });
-    alert("임시 저장됨");
+    onAddEntry({ 
+      platform: sel, 
+      menuSales: sales, 
+      platformTotalAmount: amount, 
+      platformTotalCount: count, 
+      feeAmount: fee, 
+      settlementAmount: amount - fee 
+    });
+    alert(`${configs[sel].name} 데이터가 임시 저장되었습니다.`);
   };
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {(Object.keys(configs) as PlatformType[]).map(pt => (
-          <button key={pt} onClick={() => setSel(pt)} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${sel === pt ? 'bg-white/10 border-blue-500/50' : 'glass border-white/5 text-white/30'}`}>{configs[pt].name}</button>
+          <button 
+            key={pt} 
+            onClick={() => setSel(pt)} 
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap border transition-all ${sel === pt ? 'bg-white/10 border-blue-500/50 text-white ring-1 ring-blue-500/20' : 'glass border-white/5 text-white/30 hover:text-white'}`}
+          >
+            {configs[pt].name} {existingEntries.some(e => e.platform === pt) && '✓'}
+          </button>
         ))}
       </div>
-      <div className="space-y-3 glass p-4 rounded-2xl">
-        {menus.map(m => (
-          <div key={m} className="grid grid-cols-12 gap-2 items-center">
-            <div className="col-span-4 text-xs font-medium">{m}</div>
-            <input type="number" placeholder="건수" className="col-span-3 text-center text-xs py-2" value={data[m]?.count || ''} onChange={e => setData({...data, [m]: {...data[m], count: e.target.value}})} />
-            <input type="number" placeholder="금액" className="col-span-5 text-right text-xs py-2" value={data[m]?.amount || ''} onChange={e => setData({...data, [m]: {...data[m], amount: e.target.value}})} />
-          </div>
-        ))}
-        <button onClick={handleSave} className="w-full mt-2 py-3 bg-white/10 rounded-xl text-xs font-bold hover:bg-white/20">플랫폼 임시 저장</button>
+      <div className="space-y-4 glass p-5 rounded-3xl border-white/5 bg-white/5">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs font-bold text-blue-400">{configs[sel].name} 메뉴별 입력</p>
+          <p className="text-[10px] text-white/20">데이터 자동 저장 안됨 → 하단 저장 필수</p>
+        </div>
+        <div className="space-y-2">
+          {menus.map(m => (
+            <div key={m} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-4 text-xs font-medium text-white/80">{m}</div>
+              <input 
+                type="number" 
+                placeholder="건수" 
+                className="col-span-3 text-center text-xs py-2.5" 
+                value={data[m]?.count || ''} 
+                onChange={e => setData({...data, [m]: {...(data[m] || {amount:''}), count: e.target.value}})} 
+              />
+              <div className="col-span-5 relative">
+                <input 
+                  type="number" 
+                  placeholder="금액" 
+                  className="w-full text-right pr-6 text-xs py-2.5" 
+                  value={data[m]?.amount || ''} 
+                  onChange={e => setData({...data, [m]: {...(data[m] || {count:''}), amount: e.target.value}})} 
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/20 font-bold">원</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button 
+          onClick={handleSave} 
+          className="w-full mt-2 py-3.5 bg-white/10 rounded-2xl text-xs font-bold hover:bg-white/20 transition-all border border-white/10 flex items-center justify-center gap-2"
+        >
+          <Save className="w-3.5 h-3.5 text-blue-500" /> {configs[sel].name} 플랫폼 임시 저장
+        </button>
       </div>
     </div>
   );
